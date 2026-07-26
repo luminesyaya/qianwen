@@ -2,7 +2,7 @@
 import time, requests, argparse, statistics
 
 BASE = "http://localhost:8000"
-MODEL = "qwen"
+MODEL = "outputs/qwen_merged"
 WARMUP = 2
 
 
@@ -20,9 +20,9 @@ def bench_single(input_tokens, output_tokens, runs=5):
         data = r.json()
         elapsed = time.perf_counter() - t0
         choice = data.get("choices", [{}])[0]
-        reply = choice.get("message", {}).get("content", "")
-        # Estimate tok/s from reply length
-        tok_sec = len(reply) / elapsed if elapsed > 0 else 0
+        usage = data.get("usage", {})
+        tokens = usage.get("completion_tokens", output_tokens)
+        tok_sec = tokens / elapsed if elapsed > 0 else 0
         if _ >= WARMUP:
             ttfts.append(elapsed)
             tok_per_s.append(tok_sec)

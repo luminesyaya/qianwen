@@ -2,7 +2,7 @@
 import json, time, requests
 
 BASE = "http://localhost:8000"
-MODEL = "qwen"
+MODEL = "outputs/qwen_merged"
 
 
 def eval_vllm(data_path, constrained=False, max_samples=20):
