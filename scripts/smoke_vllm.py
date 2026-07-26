@@ -2,7 +2,7 @@
 import json, time, requests
 
 BASE = "http://localhost:8000"
-MODEL = "qwen"  # vLLM 自动识别模型名
+MODEL = "outputs/qwen_merged"  # 和 serve_vllm.sh 里的一致
 
 
 def test(name, fn):

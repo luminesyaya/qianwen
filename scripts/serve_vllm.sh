@@ -21,9 +21,10 @@ if [ ! -d "$MODEL_PATH" ]; then
 fi
 
 echo "Starting vLLM: $MODEL_PATH on port $PORT"
-python3 -m vllm.entrypoints.openai.api_server \
+VLLM_USE_FLASHINFER_SAMPLER=0 python3 -m vllm.entrypoints.openai.api_server \
     --model "$MODEL_PATH" \
     --port "$PORT" \
     --max-model-len "$MAX_MODEL_LEN" \
     --trust-remote-code \
-    --dtype auto
+    --dtype auto \
+    --enforce-eager

@@ -12,16 +12,17 @@ def bench_single(input_tokens, output_tokens, runs=5):
 
     for _ in range(WARMUP + runs):
         t0 = time.perf_counter()
-        r = requests.post(f"{BASE}/v1/completions", json={
-            "model": MODEL, "prompt": prompt,
+        r = requests.post(f"{BASE}/v1/chat/completions", json={
+            "model": MODEL,
+            "messages": [{"role": "user", "content": prompt}],
             "max_tokens": output_tokens, "temperature": 0.0,
         }, timeout=60)
         data = r.json()
         elapsed = time.perf_counter() - t0
-        usage = data.get("usage", {})
-        ttft = data.get("usage", {}).get("completion_tokens", output_tokens) / output_tokens * 0.01
-        # vLLM doesn't expose TTFT separately; use elapsed/tokens
-        tok_sec = usage.get("completion_tokens", output_tokens) / elapsed if elapsed > 0 else 0
+        choice = data.get("choices", [{}])[0]
+        reply = choice.get("message", {}).get("content", "")
+        # Estimate tok/s from reply length
+        tok_sec = len(reply) / elapsed if elapsed > 0 else 0
         if _ >= WARMUP:
             ttfts.append(elapsed)
             tok_per_s.append(tok_sec)
@@ -36,8 +37,9 @@ def bench_concurrent(input_tokens, output_tokens, concurrency):
 
     def worker():
         t0 = time.perf_counter()
-        r = requests.post(f"{BASE}/v1/completions", json={
-            "model": MODEL, "prompt": prompt,
+        r = requests.post(f"{BASE}/v1/chat/completions", json={
+            "model": MODEL,
+            "messages": [{"role": "user", "content": prompt}],
             "max_tokens": output_tokens, "temperature": 0.0,
         }, timeout=120)
         elapsed = time.perf_counter() - t0
