@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qwen IE — 结构化信息抽取</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f; --surface: #13141f; --card: #1a1b2e;
+    --border: #252640; --text: #e1e4f0; --muted: #6b7094;
+    --accent: #6366f1; --accent-glow: rgba(99,102,241,0.25);
+    --green: #22c55e; --amber: #f59e0b; --red: #ef4444;
+    --blue: #3b82f6; --teal: #14b8a6;
+    --radius: 14px; --radius-sm: 8px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99,102,241,0.08), transparent),
+      radial-gradient(ellipse 60% 40% at 80% 80%, rgba(59,130,246,0.05), transparent);
+  }
+
+  /* -- Layout -- */
+  .app { max-width: 1040px; margin: 0 auto; padding: 40px 24px 80px; }
+  header { margin-bottom: 36px; }
+  .logo-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .logo {
+    width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent), #8b5cf6);
+    border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem; color: #fff;
+  }
+  h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.5px; color: #f1f5f9; }
+  .subtitle { color: var(--muted); font-size: 0.92rem; line-height: 1.6; }
+  .badges { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+  .badge {
+    font-size: 0.78rem; padding: 6px 14px; border-radius: 20px;
+    border: 1px solid var(--border); background: var(--surface);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .badge .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .dot.green { background: var(--green); }
+  .dot.amber { background: var(--amber); }
+  .dot.blue  { background: var(--blue); }
+
+  /* -- Input Card -- */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 24px; margin-bottom: 24px;
+    backdrop-filter: blur(10px);
+  }
+  .card-header { font-weight: 600; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); margin-bottom: 14px; }
+  textarea {
+    width: 100%; height: 150px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text); padding: 16px; font-size: 0.95rem;
+    resize: vertical; font-family: inherit; line-height: 1.7;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  textarea::placeholder { color: #3d4060; }
+  textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+
+  .controls { display: flex; gap: 12px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
+  .task-select {
+    display: flex; background: var(--bg); border-radius: 10px; padding: 3px;
+    border: 1px solid var(--border);
+  }
+  .task-btn {
+    padding: 9px 18px; border-radius: 8px; border: none; cursor: pointer;
+    font-size: 0.85rem; font-weight: 500; font-family: inherit;
+    background: transparent; color: var(--muted);
+    transition: 0.2s;
+  }
+  .task-btn.active { background: var(--accent); color: #fff; }
+
+  .btn-extract {
+    padding: 11px 32px; border: none; border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), #8b5cf6);
+    color: #fff; font-weight: 600; font-size: 0.9rem; cursor: pointer;
+    font-family: inherit; transition: 0.2s; box-shadow: 0 4px 16px rgba(99,102,241,0.3);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .btn-extract:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(99,102,241,0.4); }
+  .btn-extract:disabled { opacity: 0.5; transform: none; cursor: not-allowed; box-shadow: none; }
+
+  .spinner {
+    width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite;
+    display: none;
+  }
+  .btn-extract.loading .spinner { display: block; }
+  .btn-extract.loading .btn-text { display: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .timing { font-size: 0.85rem; color: var(--muted); }
+
+  /* -- Results -- */
+  .results-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 700px) { .results-grid { grid-template-columns: 1fr; } }
+
+  .result-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+  }
+  .result-card-header {
+    padding: 14px 20px; font-weight: 600; font-size: 0.85rem;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .count-badge {
+    font-size: 0.75rem; padding: 3px 10px; border-radius: 12px;
+    background: var(--bg); border: 1px solid var(--border);
+  }
+
+  .entity-grid { display: flex; flex-wrap: wrap; gap: 8px; padding: 18px; }
+  .entity-chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 14px; border-radius: 10px;
+    background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2);
+    transition: 0.15s;
+  }
+  .entity-chip:hover { background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.35); }
+  .entity-chip .e-name { font-weight: 600; font-size: 0.9rem; color: #e2e8ff; }
+  .entity-chip .e-type {
+    font-size: 0.72rem; padding: 2px 8px; border-radius: 6px;
+    background: rgba(99,102,241,0.2); color: #a5b4fc;
+  }
+
+  .relation-list { padding: 18px; }
+  .relation-item {
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+    border-radius: 8px; margin-bottom: 6px;
+    background: var(--bg); border: 1px solid transparent;
+    transition: 0.15s; font-size: 0.88rem;
+  }
+  .relation-item:hover { border-color: var(--border); }
+  .r-head, .r-tail { font-weight: 600; color: #93c5fd; }
+  .r-rel {
+    font-size: 0.72rem; padding: 3px 10px; border-radius: 8px;
+    background: rgba(245,158,11,0.12); color: var(--amber);
+    font-weight: 500; white-space: nowrap;
+  }
+  .r-arrow { color: var(--muted); }
+
+  .json-output {
+    padding: 18px; background: var(--bg); border-radius: var(--radius-sm);
+    margin: 18px; overflow-x: auto; max-height: 500px; overflow-y: auto;
+  }
+  pre { white-space: pre-wrap; word-break: break-word; font-size: 0.85rem; line-height: 1.7; font-family: 'SF Mono', 'Fira Code', monospace; }
+  .j-key { color: #c4a5ff; } .j-str { color: #6ee7b7; } .j-num { color: #ffa657; } .j-bool { color: #67e8f9; }
+
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: var(--muted);
+    font-size: 0.95rem;
+  }
+  .empty-state .icon { font-size: 3rem; margin-bottom: 12px; }
+
+  .error-toast {
+    background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3);
+    border-radius: var(--radius-sm); padding: 16px; margin-bottom: 20px;
+    color: #fca5a5; font-size: 0.9rem;
+  }
+
+  footer {
+    text-align: center; padding: 40px 0 0; color: var(--muted); font-size: 0.8rem;
+    border-top: 1px solid var(--border); margin-top: 48px;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo-row">
+      <div class="logo">&#9883;</div>
+      <h1>结构化信息抽取</h1>
+    </div>
+    <p class="subtitle">
+      基于 Qwen2.5-1.5B-Instruct + LoRA 微调，从中文文本中自动抽取实体与关系三元组。
+      覆盖 12 个主题领域，Parse 率 95.2%。
+    </p>
+    <div class="badges">
+      <div class="badge"><span class="dot green"></span> Qwen2.5-1.5B</div>
+      <div class="badge"><span class="dot blue"></span> LoRA r=8</div>
+      <div class="badge"><span class="dot amber"></span> 12 Topics</div>
+      <div class="badge"><span class="dot green"></span> Parse 95.2%</div>
+    </div>
+  </header>
+
+  <div id="error" style="display:none"></div>
+
+  <div class="card">
+    <div class="card-header">输入文本</div>
+    <textarea id="input" placeholder="输入一段中文文本，例如：&#10;乔布斯于1976年在美国加州创立了苹果公司，随后推出了iPhone、iPad等革命性产品。&#10;&#10;模型将自动抽取所有实体和关系..."></textarea>
+    <div class="controls">
+      <div class="task-select" id="taskSelect">
+        <button class="task-btn active" data-task="ie_extraction">信息抽取</button>
+        <button class="task-btn" data-task="relation_qa">关系问答</button>
+        <button class="task-btn" data-task="entity_verification">事实核查</button>
+      </div>
+      <button class="btn-extract" id="btnExtract" onclick="extract()">
+        <span class="btn-text">开始抽取</span><span class="spinner"></span>
+      </button>
+      <span class="timing" id="timing"></span>
+    </div>
+  </div>
+
+  <div id="resultArea">
+    <div class="empty-state">
+      <div class="icon">&#128269;</div>
+      <p>输入文本，点击"开始抽取"查看结构化结果</p>
+    </div>
+  </div>
+
+  <footer>
+    Qwen IE &middot; InstructIE Dataset &middot; vLLM Serving &middot; GitHub: luminesyaya/qianwen
+  </footer>
+</div>
+
+<script>
+const API = 'http://localhost:8000/v1/chat/completions';
+const MODEL = 'outputs/qwen_merged';
+
+// Task selector
+document.getElementById('taskSelect').addEventListener('click', e => {
+  if (!e.target.classList.contains('task-btn')) return;
+  document.querySelectorAll('.task-btn').forEach(b => b.classList.remove('active'));
+  e.target.classList.add('active');
+});
+
+function $(id) { return document.getElementById(id); }
+
+async function extract() {
+  const input = $('input').value.trim();
+  if (!input) return;
+
+  const task = document.querySelector('.task-btn.active').dataset.task;
+  const btn = $('btnExtract');
+  btn.classList.add('loading'); btn.disabled = true;
+  $('error').style.display = 'none';
+  $('timing').textContent = '';
+
+  const prompts = {
+    ie_extraction: {
+      system: '你是一个严格遵循 schema 的信息抽取助手。从文本中抽取所有实体和关系三元组，只输出 JSON。格式为 {"entities":[{"entity":"名称","entity_type":"类型"}],"relations":[{"head":"主体","relation":"关系","tail":"客体"}]}。不附加解释。',
+      user: `从以下文本中抽取实体和关系三元组：\n\n${input}`
+    },
+    relation_qa: {
+      system: '你是一个关系问答助手，根据文本简洁回答问题。',
+      user: `根据文本回答：\n\n${input}\n\n直接给出答案。`
+    },
+    entity_verification: {
+      system: '你是一个事实核查助手，判断声明是否成立。',
+      user: `根据文本判断：\n\n${input}\n\n回答"成立"或"不成立"并给出理由。`
+    },
+  };
+
+  const t0 = performance.now();
+  try {
+    const r = await fetch(API, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: MODEL, messages: [
+          { role: 'system', content: prompts[task].system },
+          { role: 'user', content: prompts[task].user },
+        ],
+        max_tokens: 1024, temperature: 0.1,
+      }),
+    });
+    const data = await r.json();
+    $('timing').textContent = `${((performance.now()-t0)/1000).toFixed(2)}s`;
+
+    if (!data.choices) throw new Error(JSON.stringify(data));
+    renderResult(data.choices[0].message.content, task);
+  } catch (e) {
+    $('error').style.display = 'block';
+    $('error').innerHTML = `<div class="error-toast">请求失败：${escapeHtml(e.message)}<br>请确认 vLLM 服务已启动（端口 8000）</div>`;
+  }
+  btn.classList.remove('loading'); btn.disabled = false;
+}
+
+function renderResult(reply, task) {
+  const json = tryParse(reply);
+  if (task === 'ie_extraction' && json && json.entities && json.relations) {
+    renderIE(json);
+  } else if (json) {
+    renderJSON(json);
+  } else {
+    $('resultArea').innerHTML = `<div class="card"><div class="json-output"><pre>${escapeHtml(reply)}</pre></div></div>`;
+  }
+}
+
+function tryParse(text) {
+  const cs = [text.trim()];
+  const m = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (m) cs.push(m[1].trim());
+  for (const c of cs) { try { return JSON.parse(c); } catch {} }
+  return null;
+}
+
+function renderIE(json) {
+  const entitiesHtml = json.entities.map(e =>
+    `<div class="entity-chip"><span class="e-name">${escapeHtml(e.entity||e.entity_name||'?')}</span><span class="e-type">${escapeHtml(e.entity_type||e.type||'?')}</span></div>`
+  ).join('');
+
+  const relationsHtml = json.relations.map(r =>
+    `<div class="relation-item">
+      <span class="r-head">${escapeHtml(r.head||r.subject||'?')}</span>
+      <span class="r-arrow">→</span>
+      <span class="r-rel">${escapeHtml(r.relation||r.predicate||'?')}</span>
+      <span class="r-arrow">→</span>
+      <span class="r-tail">${escapeHtml(r.tail||r.object||'?')}</span>
+    </div>`
+  ).join('');
+
+  $('resultArea').innerHTML = `
+    <div class="results-grid">
+      <div class="result-card">
+        <div class="result-card-header">
+          <span>实体</span>
+          <span class="count-badge">${json.entities.length} 个</span>
+        </div>
+        <div class="entity-grid">${entitiesHtml || '<div class="empty-state" style="padding:30px">无</div>'}</div>
+      </div>
+      <div class="result-card">
+        <div class="result-card-header">
+          <span>关系三元组</span>
+          <span class="count-badge">${json.relations.length} 条</span>
+        </div>
+        <div class="relation-list">${relationsHtml || '<div class="empty-state" style="padding:30px">无</div>'}</div>
+      </div>
+    </div>`;
+}
+
+function renderJSON(json) {
+  $('resultArea').innerHTML = `<div class="card"><div class="json-output"><pre>${syntaxHighlight(JSON.stringify(json,null,2))}</pre></div></div>`;
+}
+
+function syntaxHighlight(j) {
+  return j.replace(/("(?:[^"\\]|\\.)*")\s*:/g, '<span class="j-key">$1</span>:')
+          .replace(/: "(?:[^"\\]|\\.)*"/g, m => ': <span class="j-str">'+m.slice(2)+'</span>')
+          .replace(/: (\d+)/g, ': <span class="j-num">$1</span>')
+          .replace(/: (true|false)/g, ': <span class="j-bool">$1</span>');
+}
+
+function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+</body>
+</html>
