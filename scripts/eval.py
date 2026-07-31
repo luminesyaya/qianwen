@@ -130,10 +130,20 @@ def compute_structural_quality(pred):
 def evaluate(model_path, data_path, max_samples=None):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-1.5B-Instruct")
-    model = AutoModelForCausalLM.from_pretrained(
-        "Qwen/Qwen2.5-1.5B-Instruct", torch_dtype=torch.float16
-    ).to(device)
-    model = PeftModel.from_pretrained(model, model_path)
+
+    # 自动检测 LoRA adapter 还是完整模型
+    from pathlib import Path
+    is_full_model = Path(model_path, "model.safetensors").exists()
+    if is_full_model:
+        print("Detected full model (GRPO output)")
+        model = AutoModelForCausalLM.from_pretrained(
+            model_path, torch_dtype=torch.float16
+        ).to(device)
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            "Qwen/Qwen2.5-1.5B-Instruct", torch_dtype=torch.float16
+        ).to(device)
+        model = PeftModel.from_pretrained(model, model_path)
     model.eval()
 
     samples = [json.loads(l) for l in open(data_path, encoding="utf-8")]
