@@ -126,7 +126,7 @@ def main():
     MODEL_PATH = "outputs/qwen_lora/final"  # 你的 SFT LoRA
     BASE_MODEL = "Qwen/Qwen2.5-1.5B-Instruct"
     DATA_PATH = "data/clean/train.jsonl"
-    MAX_SAMPLES = 500
+    MAX_SAMPLES = 1000
 
     print("Loading model...")
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
