@@ -134,14 +134,11 @@ def main():
         num_train_epochs=1,
         per_device_train_batch_size=2,
         gradient_accumulation_steps=2,
-        num_generations=4,       # group_size
-        max_prompt_length=1024,
+        num_generations=4,
         max_completion_length=1024,
-        temperature=1.0,
         learning_rate=4e-5,
         logging_steps=1,
         save_steps=50,
-        bf16=True,
     )
 
     trainer = GRPOTrainer(
