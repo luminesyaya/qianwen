@@ -149,7 +149,7 @@ def main():
         max_completion_length=1024,
         learning_rate=2e-5,
         logging_steps=5,
-        save_steps=100,
+        save_steps=200,
     )
 
     trainer = GRPOTrainer(
