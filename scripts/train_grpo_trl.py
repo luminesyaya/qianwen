@@ -126,7 +126,7 @@ def main():
     MODEL_PATH = "outputs/qwen_lora/final"  # 你的 SFT LoRA
     BASE_MODEL = "Qwen/Qwen2.5-1.5B-Instruct"
     DATA_PATH = "data/clean/train.jsonl"
-    MAX_SAMPLES = 50
+    MAX_SAMPLES = 500
 
     print("Loading model...")
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
@@ -142,15 +142,14 @@ def main():
 
     training_args = GRPOConfig(
         output_dir="outputs/grpo_ie",
-        num_train_epochs=1,
+        num_train_epochs=3,
         per_device_train_batch_size=2,
         gradient_accumulation_steps=2,
         num_generations=4,
-        max_completion_length=1536,  # 加大，避免截断
-        learning_rate=4e-5,
-        logging_steps=1,
-        save_steps=100,              # 不存中间 checkpoint，省磁盘
-        save_strategy="no",          # TRL 1.9 用这个跳过中间存盘
+        max_completion_length=1024,
+        learning_rate=2e-5,
+        logging_steps=5,
+        save_steps=200,
     )
 
     trainer = GRPOTrainer(
