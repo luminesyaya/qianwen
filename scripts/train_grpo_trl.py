@@ -58,16 +58,21 @@ def extract_gold(text):
 # ═══════════════════
 # ★ TRL reward 函数
 # ═══════════════════
-def reward_fn(prompts, completions, **kwargs):
+def reward_fn(prompts, completions, gold_str=None, **kwargs):
     """
-    TRL GRPO 调用:
-      prompts:     list[str] batch 个 prompt
-      completions: list[str] batch×num_generations 个模型回答
-      返回:        list[float] 每个回答的分数
+    TRL 自动把 dataset 的额外列(gold_str)传给这里
+    gold_str: list[str] — 每条 prompt 对应的 gold JSON 字符串
     """
+    if gold_str is None:
+        return [0.0] * len(completions)
+
     rewards = []
+    num_gen = kwargs.get("num_generations", 4)
+
     for i, completion in enumerate(completions):
-        # completion 可能是 list[dict]（chat format）或 str
+        prompt_idx = i // num_gen
+        gs = gold_str[prompt_idx] if prompt_idx < len(gold_str) else ""
+
         if isinstance(completion, list):
             text = "".join(
                 c.get("content", "") if isinstance(c, dict) else str(c)
@@ -76,19 +81,7 @@ def reward_fn(prompts, completions, **kwargs):
         else:
             text = str(completion)
 
-        # 对应的 prompt 索引: TRL 按顺序排列，prompt_i 对应
-        # completions[i*num_generations : (i+1)*num_generations]
-        prompt_idx = i // kwargs.get("num_generations", 1)
-        prompt = prompts[prompt_idx] if prompt_idx < len(prompts) else ""
-
-        # 从 prompt 末尾提取 gold JSON 字符串
-        gold_str = ""
-        for line in prompt.rsplit("\n", 10):
-            if line.strip().startswith("{"):
-                gold_str = line.strip()
-                break
-
-        rewards.append(grade_answer(text, gold_str) if gold_str else 0.0)
+        rewards.append(grade_answer(text, gs) if gs else 0.0)
 
     return rewards
 
@@ -96,17 +89,20 @@ def reward_fn(prompts, completions, **kwargs):
 # ═══════════════════
 # 数据加载
 # ═══════════════════
-def load_ie_dataset(path, max_samples=2000):
+def load_ie_dataset(path, max_samples=50):
+    """数据集单独存 prompt(不含 gold) 和 gold_str"""
     samples = []
     with open(path, encoding="utf-8") as f:
         for line in f:
             s = json.loads(line)
             if s.get("task") == "ie_extraction":
-                # 只取 prompt 部分（assistant 标记为止）
                 prompt = s["text"].split("<|im_start|>assistant\n")[0]
                 prompt += "<|im_start|>assistant\n"
                 gold = extract_gold(s["text"])
-                samples.append({"prompt": prompt, "gold": gold})
+                samples.append({
+                    "prompt": prompt,
+                    "gold_str": json.dumps(gold, ensure_ascii=False)
+                })
             if len(samples) >= max_samples:
                 break
     return Dataset.from_list(samples)
