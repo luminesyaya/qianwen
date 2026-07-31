@@ -43,11 +43,11 @@ def grade_answer(response, gold_str):
     score = 0.2  # Parse（SFT 已到天花板，降低权重）
     has_ent = "entities" in pred and isinstance(pred["entities"], list)
     has_rel = "relations" in pred and isinstance(pred["relations"], list)
+    pred_ent_n = len(pred["entities"]) if has_ent else 0
+    pred_rel_n = len(pred["relations"]) if has_rel else 0
     if has_ent and has_rel:
         score += 0.1  # Alias（也都过了）
         # Strict — 唯一有区分度的维度，权重大
-        pred_ent_n = len(pred["entities"])
-        pred_rel_n = len(pred["relations"])
         gold_ent_n = len(gold.get("entities", []))
         gold_rel_n = len(gold.get("relations", []))
         # 数量越接近 gold 分越高
