@@ -141,7 +141,7 @@ def main():
     print(f"Loaded {len(dataset)} ie_extraction samples")
 
     training_args = GRPOConfig(
-        output_dir="outputs/grpo_ie",
+        output_dir="/tmp/grpo_ie",
         num_train_epochs=3,
         per_device_train_batch_size=2,
         gradient_accumulation_steps=2,
@@ -149,7 +149,7 @@ def main():
         max_completion_length=1024,
         learning_rate=2e-5,
         logging_steps=5,
-        save_steps=200,
+        save_strategy="no",    # 不存 checkpoint，节省磁盘
     )
 
     trainer = GRPOTrainer(
@@ -164,13 +164,11 @@ def main():
     trainer.train()
 
     try:
-        trainer.save_model("outputs/grpo_ie_final")
-    except Exception:
-        print("Disk full — saving LoRA adapter only")
         model.save_pretrained("/tmp/grpo_ie_final")
         tokenizer.save_pretrained("/tmp/grpo_ie_final")
-
-    print("Done.")
+        print("Model saved to /tmp/grpo_ie_final")
+    except Exception as e:
+        print(f"Save failed: {e}")
 
 
 if __name__ == "__main__":
