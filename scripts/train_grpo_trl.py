@@ -34,19 +34,30 @@ def extract_json(text):
 
 
 def grade_answer(response, gold_str):
-    """Parse + Alias + Strict → 0~1 连续分"""
+    """Parse + Alias + Strict → 0~1 连续分（Strict 权重最高，唯一有区分度的维度）"""
     pred = extract_json(response)
     gold = json.loads(gold_str) if isinstance(gold_str, str) else gold_str
     if pred is None:
         return 0.0
-    score = 0.3
+
+    score = 0.2  # Parse（SFT 已到天花板，降低权重）
     has_ent = "entities" in pred and isinstance(pred["entities"], list)
     has_rel = "relations" in pred and isinstance(pred["relations"], list)
     if has_ent and has_rel:
-        score += 0.2
-        if len(pred["entities"]) == len(gold.get("entities", [])) and \
-           len(pred["relations"]) == len(gold.get("relations", [])):
-            score += 0.3
+        score += 0.1  # Alias（也都过了）
+        # Strict — 唯一有区分度的维度，权重大
+        pred_ent_n = len(pred["entities"])
+        pred_rel_n = len(pred["relations"])
+        gold_ent_n = len(gold.get("entities", []))
+        gold_rel_n = len(gold.get("relations", []))
+        # 数量越接近 gold 分越高
+        ent_err = abs(pred_ent_n - gold_ent_n) / max(gold_ent_n, 1)
+        rel_err = abs(pred_rel_n - gold_rel_n) / max(gold_rel_n, 1)
+        strict_score = max(0, 1 - (ent_err + rel_err) / 2)
+        score += 0.5 * strict_score  # Strict 占 50% 权重
+    # 长度惩罚：极端短或极端长都有问题
+    if has_ent and pred_ent_n == 0 and gold_ent_n > 0:
+        score = max(0, score - 0.3)  # 完全没抽到实体，重罚
     return score
 
 
@@ -135,10 +146,11 @@ def main():
         per_device_train_batch_size=2,
         gradient_accumulation_steps=2,
         num_generations=4,
-        max_completion_length=1024,
+        max_completion_length=1536,  # 加大，避免截断
         learning_rate=4e-5,
         logging_steps=1,
-        save_steps=50,
+        save_steps=100,              # 不存中间 checkpoint，省磁盘
+        save_strategy="no",          # TRL 1.9 用这个跳过中间存盘
     )
 
     trainer = GRPOTrainer(
@@ -151,7 +163,14 @@ def main():
 
     print("Training GRPO...")
     trainer.train()
-    trainer.save_model("outputs/grpo_ie_final")
+
+    try:
+        trainer.save_model("outputs/grpo_ie_final")
+    except Exception:
+        print("Disk full — saving LoRA adapter only")
+        model.save_pretrained("/tmp/grpo_ie_final")
+        tokenizer.save_pretrained("/tmp/grpo_ie_final")
+
     print("Done.")
 
 
